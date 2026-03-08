@@ -53,14 +53,22 @@ Return ONLY a JSON array of steps in this format:
     }}
 ]
 """
-            response = self.llm_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.5,
-                max_tokens=800
-            )
+            # Check if it's a LangChain client (Groq) or OpenAI client
+            if hasattr(self.llm_client, 'invoke'):
+                # LangChain client (Groq)
+                response = self.llm_client.invoke(prompt)
+                content = response.content
+            else:
+                # OpenAI client
+                response = self.llm_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.5,
+                    max_tokens=800
+                )
+                content = response.choices[0].message.content.strip()
             
-            plan = json.loads(response.choices[0].message.content.strip())
+            plan = json.loads(content)
             return self._validate_plan(plan, max_steps)
             
         except Exception as e:

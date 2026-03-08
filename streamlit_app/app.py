@@ -1,7 +1,7 @@
 """
 Streamlit Web Interface for the Autonomous Research Agent.
 Features:
-- Multi-LLM provider support (OpenAI, Gemini, Claude, Groq, Grok)
+- Groq LLM provider support (Llama 3.1 70B)
 - API key auto-detection
 - Environment variable and manual entry modes
 - PDF, DOCX, and Markdown report downloads
@@ -26,17 +26,25 @@ if str(project_root / "src") not in sys.path:
     sys.path.insert(0, str(project_root / "src"))
 # ------------------------------------------
 
+# Load environment variables from .env file (in parent directory)
+try:
+    from dotenv import load_dotenv
+    env_path = project_root.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+    else:
+        # Try project root as fallback
+        env_path = project_root / ".env"
+        if env_path.exists():
+            load_dotenv(env_path)
+except ImportError:
+    pass
+
 # Import from src
 from src.orchestrator import Orchestrator, get_llm_client
 from src.multi_llm import (
-    MultiLLMManager,
     LLMProvider,
-    detect_provider_from_key,
-    validate_api_key,
-    get_provider_display_name,
-    get_available_providers,
-    initialize_multi_llm_session_state,
-    render_api_configuration_sidebar
+    initialize_multi_llm_session_state
 )
 
 
@@ -53,40 +61,24 @@ def initialize_session_state():
     
     # Initialize multi-LLM session state
     initialize_multi_llm_session_state()
+    
+    # Auto-configure Groq API key from environment
+    api_key = os.getenv('GROQ_API_KEY')
+    if api_key and 'llm_manager' in st.session_state:
+        try:
+            llm_manager = st.session_state.llm_manager
+            if LLMProvider.GROQ not in llm_manager.list_configured_providers():
+                llm_manager.add_api_key(api_key, LLMProvider.GROQ)
+                llm_manager.set_current_provider(LLMProvider.GROQ)
+        except Exception:
+            pass
 
 
 def render_sidebar():
-    """Render sidebar with configuration and info."""
+    """Render sidebar with info only - API is pre-configured."""
     with st.sidebar:
-        st.title("⚙️ Configuration")
+        st.title("⚙️ About")
         
-        # Multi-LLM API Configuration
-        selected_provider, api_key, config_mode = render_api_configuration_sidebar()
-        
-        st.divider()
-        
-        # Configure LLM if API key provided
-        if api_key and selected_provider:
-            try:
-                llm_manager = st.session_state.llm_manager
-                detected_provider = llm_manager.add_api_key(api_key, selected_provider)
-                st.success(f"✅ {get_provider_display_name(detected_provider)} configured!")
-                
-                # Set as current provider
-                llm_manager.set_current_provider(detected_provider)
-                
-            except Exception as e:
-                st.error(f"Failed to configure API: {str(e)}")
-        
-        # Display current provider status
-        if 'llm_manager' in st.session_state:
-            current = st.session_state.llm_manager.get_current_provider()
-            if current:
-                st.info(f"🎯 Active: {get_provider_display_name(current)}")
-        
-        st.divider()
-        
-        st.markdown("### About")
         st.markdown("""
         **Autonomous Research Agent**
         
@@ -96,12 +88,8 @@ def render_sidebar():
         - Extracts and verifies information
         - Generates cited reports
         
-        **Supported LLM Providers:**
-        - 🟢 OpenAI (GPT-4, GPT-3.5)
-        - 🔵 Google Gemini
-        - 🟠 Anthropic Claude
-        - ⚡ Groq (Llama models)
-        - ✖️ xAI Grok
+        **LLM Provider:**
+        - ⚡ Groq (Llama 3.1 70B)
         
         **Workflow:**
         1. 📋 Planning
@@ -156,7 +144,7 @@ def run_research(query: str, max_sources: int):
     progress_placeholder = st.empty()
     
     try:
-        # Get LLM client from multi-LLM manager
+        # Get LLM client - first try session state, then environment
         llm_client = None
         if 'llm_manager' in st.session_state:
             llm_client = st.session_state.llm_manager.get_current_client()
@@ -164,6 +152,11 @@ def run_research(query: str, max_sources: int):
         # Fallback to environment-based client
         if llm_client is None:
             llm_client = get_llm_client()
+        
+        if llm_client is None:
+            st.error("❌ GROQ_API_KEY not configured. Please set the environment variable.")
+            st.session_state.is_processing = False
+            return
         
         orchestrator = Orchestrator(llm_client)
         
@@ -263,7 +256,7 @@ def main():
     st.markdown(
         """
         <div style='text-align: center; color: gray; font-size: 0.9rem;'>
-            Powered by LangGraph • Multi-Agent Architecture • Multi-LLM Support • Open Source
+            Powered by LangGraph • Multi-Agent Architecture • Groq LLM • Open Source
         </div>
         """,
         unsafe_allow_html=True

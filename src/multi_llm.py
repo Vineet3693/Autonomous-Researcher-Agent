@@ -11,22 +11,14 @@ from enum import Enum
 
 
 class LLMProvider(Enum):
-    """Supported LLM providers."""
-    OPENAI = "openai"
-    GEMINI = "gemini"
-    CLAUDE = "claude"
+    """Supported LLM provider (Groq only)."""
     GROQ = "groq"
-    GROK = "grok"
     UNKNOWN = "unknown"
 
 
-# API Key patterns for auto-detection
+# API Key patterns for auto-detection (Groq only)
 API_KEY_PATTERNS = {
-    LLMProvider.OPENAI: [r"^sk-[a-zA-Z0-9]{48}$", r"^sk-proj-[a-zA-Z0-9]{48}$"],
-    LLMProvider.GEMINI: [r"^AIza[a-zA-Z0-9_-]{35}$"],
-    LLMProvider.CLAUDE: [r"^sk-ant-[a-zA-Z0-9_-]{90,}$"],
     LLMProvider.GROQ: [r"^gsk_[a-zA-Z0-9]{52}$"],
-    LLMProvider.GROK: [r"^xai-[a-zA-Z0-9]{64}$"],
 }
 
 
@@ -50,69 +42,35 @@ def detect_provider_from_key(api_key: str) -> LLMProvider:
             if re.match(pattern, api_key):
                 return provider
     
-    # Fallback: check prefixes
-    if api_key.startswith("sk-") and not api_key.startswith("sk-ant"):
-        return LLMProvider.OPENAI
-    elif api_key.startswith("sk-ant"):
-        return LLMProvider.CLAUDE
-    elif api_key.startswith("AIza"):
-        return LLMProvider.GEMINI
-    elif api_key.startswith("gsk_"):
+    # Fallback: check Groq prefix
+    if api_key.startswith("gsk_"):
         return LLMProvider.GROQ
-    elif api_key.startswith("xai-"):
-        return LLMProvider.GROK
     
     return LLMProvider.UNKNOWN
 
 
 def get_llm_client(provider: LLMProvider, api_key: str) -> Optional[Any]:
     """
-    Create LLM client based on provider.
+    Create Groq LLM client.
     
     Args:
-        provider: LLM provider enum
-        api_key: API key for the provider
+        provider: LLM provider enum (should be GROQ)
+        api_key: API key for Groq
         
     Returns:
-        LLM client instance or None if unavailable
+        Groq LLM client instance or None if unavailable
     """
-    if provider == LLMProvider.UNKNOWN:
+    if provider != LLMProvider.GROQ:
         return None
     
     try:
-        if provider == LLMProvider.OPENAI:
-            from openai import OpenAI
-            return OpenAI(api_key=api_key)
-        
-        elif provider == LLMProvider.GEMINI:
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            return genai.GenerativeModel('gemini-pro')
-        
-        elif provider == LLMProvider.CLAUDE:
-            from anthropic import Anthropic
-            return Anthropic(api_key=api_key)
-        
-        elif provider == LLMProvider.GROQ:
-            from langchain_groq import ChatGroq
-            return ChatGroq(model="llama-3.1-70b-versatile", api_key=api_key)
-        
-        elif provider == LLMProvider.GROK:
-            from openai import OpenAI
-            # Grok uses OpenAI-compatible API
-            return OpenAI(
-                api_key=api_key,
-                base_url="https://api.x.ai/v1"
-            )
-        
-        else:
-            return None
-            
+        from langchain_groq import ChatGroq
+        return ChatGroq(model="llama-3.1-70b-versatile", api_key=api_key)
     except ImportError as e:
-        print(f"Warning: Required package for {provider.value} not installed: {e}")
+        print(f"Warning: langchain_groq not installed: {e}")
         return None
     except Exception as e:
-        print(f"Error creating {provider.value} client: {e}")
+        print(f"Error creating Groq client: {e}")
         return None
 
 
@@ -140,11 +98,7 @@ def validate_api_key(api_key: str, provider: Optional[LLMProvider] = None) -> bo
 def get_provider_display_name(provider: LLMProvider) -> str:
     """Get human-readable provider name."""
     names = {
-        LLMProvider.OPENAI: "OpenAI (GPT)",
-        LLMProvider.GEMINI: "Google Gemini",
-        LLMProvider.CLAUDE: "Anthropic Claude",
         LLMProvider.GROQ: "Groq (Llama)",
-        LLMProvider.GROK: "xAI Grok",
         LLMProvider.UNKNOWN: "Unknown Provider"
     }
     return names.get(provider, provider.value)
@@ -166,51 +120,25 @@ def get_available_providers() -> Dict[str, str]:
 
 def invoke_llm(client: Any, provider: LLMProvider, prompt: str, **kwargs) -> str:
     """
-    Invoke LLM with prompt and return response.
+    Invoke Groq LLM with prompt and return response.
     
     Args:
-        client: LLM client instance
-        provider: LLM provider enum
+        client: Groq LLM client instance
+        provider: LLM provider enum (should be GROQ)
         prompt: Input prompt
-        **kwargs: Additional provider-specific arguments
+        **kwargs: Additional arguments
         
     Returns:
         LLM response text
     """
-    temperature = kwargs.get('temperature', 0.1)
-    max_tokens = kwargs.get('max_tokens', 4096)
+    if provider != LLMProvider.GROQ:
+        raise ValueError(f"Only Groq provider is supported")
     
     try:
-        if provider == LLMProvider.OPENAI or provider == LLMProvider.GROK:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini" if provider == LLMProvider.OPENAI else "grok-beta",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
-            return response.choices[0].message.content
-        
-        elif provider == LLMProvider.GEMINI:
-            response = client.generate_content(prompt)
-            return response.text
-        
-        elif provider == LLMProvider.CLAUDE:
-            response = client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=max_tokens,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            return response.content[0].text
-        
-        elif provider == LLMProvider.GROQ:
-            response = client.invoke(prompt)
-            return response.content
-        
-        else:
-            raise ValueError(f"Unsupported provider: {provider}")
-            
+        response = client.invoke(prompt)
+        return response.content
     except Exception as e:
-        raise Exception(f"LLM invocation failed for {provider.value}: {str(e)}")
+        raise Exception(f"LLM invocation failed for Groq: {str(e)}")
 
 
 class MultiLLMManager:
@@ -303,7 +231,7 @@ def initialize_multi_llm_session_state():
 
 def render_api_configuration_sidebar():
     """
-    Render API configuration UI in sidebar.
+    Render API configuration UI in sidebar for Groq only.
     Returns selected provider and API key.
     """
     import streamlit as st
@@ -315,91 +243,39 @@ def render_api_configuration_sidebar():
         config_mode = st.radio(
             "Configuration Mode",
             ["Environment Variables (Local)", "Manual Entry (Cloud)"],
-            help="Use environment variables for local development or manually enter API keys for cloud deployment"
+            help="Use environment variables for local development or manually enter API key for cloud deployment"
         )
         
-        selected_provider = None
+        selected_provider = LLMProvider.GROQ
         api_key = None
         
         if config_mode == "Environment Variables (Local)":
-            st.info("💡 Set API keys in your .env file or environment variables")
-            st.code("""
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=AIza...
-ANTHROPIC_API_KEY=sk-ant-...
-GROQ_API_KEY=gsk_...
-XAI_API_KEY=xai-...
-            """, language="bash")
+            st.info("💡 Set API key in your .env file or environment variable")
+            st.code("GROQ_API_KEY=gsk_...", language="bash")
             
-            # Check for existing env vars
-            available_env_keys = []
-            env_var_map = {
-                LLMProvider.OPENAI: "OPENAI_API_KEY",
-                LLMProvider.GEMINI: "GEMINI_API_KEY",
-                LLMProvider.CLAUDE: "ANTHROPIC_API_KEY",
-                LLMProvider.GROQ: "GROQ_API_KEY",
-                LLMProvider.GROK: "XAI_API_KEY"
-            }
-            
-            for provider, env_var in env_var_map.items():
-                if os.getenv(env_var):
-                    available_env_keys.append(provider)
-            
-            if available_env_keys:
-                st.success(f"✅ Found {len(available_env_keys)} API key(s) in environment")
-                for provider in available_env_keys:
-                    st.caption(f"- {get_provider_display_name(provider)}")
-            
-            # Provider selection
-            provider_options = get_available_providers()
-            selected_provider_str = st.selectbox(
-                "Select LLM Provider",
-                options=list(provider_options.keys()),
-                format_func=lambda x: provider_options[x],
-                key="provider_select"
-            )
-            
-            if selected_provider_str:
-                selected_provider = LLMProvider(selected_provider_str)
-                env_var = env_var_map.get(selected_provider)
-                if env_var:
-                    api_key = os.getenv(env_var)
+            # Check for Groq env var
+            api_key = os.getenv("GROQ_API_KEY")
+            if api_key:
+                st.success("✅ Groq API key found in environment")
+            else:
+                st.warning("⚠️ GROQ_API_KEY not set in environment")
                     
         else:  # Manual Entry
-            st.info("💡 Enter your API key below for cloud deployment")
+            st.info("💡 Enter your Groq API key below")
             
-            # Provider selection
-            provider_options = get_available_providers()
-            selected_provider_str = st.selectbox(
-                "Select LLM Provider",
-                options=list(provider_options.keys()),
-                format_func=lambda x: provider_options[x],
-                key="provider_select_manual"
+            # API key input
+            api_key = st.text_input(
+                "Groq API Key",
+                type="password",
+                help="Your API key will be used for this session only. Get one at https://console.groq.com"
             )
             
-            if selected_provider_str:
-                selected_provider = LLMProvider(selected_provider_str)
-                
-                # API key input
-                api_key = st.text_input(
-                    f"{get_provider_display_name(selected_provider)} API Key",
-                    type="password",
-                    help="Your API key will be used for this session only"
-                )
-                
-                # Auto-detect provider from entered key
-                if api_key:
-                    detected = detect_provider_from_key(api_key)
-                    if detected != LLMProvider.UNKNOWN and detected != selected_provider:
-                        st.warning(
-                            f"⚠️ This key appears to be for {get_provider_display_name(detected)}, "
-                            f"not {get_provider_display_name(selected_provider)}"
-                        )
-                    
-                    if validate_api_key(api_key):
-                        st.success("✅ Valid API key format")
-                    else:
-                        st.error("❌ Invalid API key format")
+            # Validate key format
+            if api_key:
+                if validate_api_key(api_key):
+                    st.success("✅ Valid Groq API key format")
+                else:
+                    st.error("❌ Invalid API key format. Groq keys start with 'gsk_'")
         
         st.divider()
         
@@ -407,7 +283,7 @@ XAI_API_KEY=xai-...
         if 'llm_manager' in st.session_state:
             configured = st.session_state.llm_manager.list_configured_providers()
             if configured:
-                st.markdown("#### Configured Providers")
+                st.markdown("#### Configured Provider")
                 for provider in configured:
                     st.caption(f"✅ {get_provider_display_name(provider)}")
         

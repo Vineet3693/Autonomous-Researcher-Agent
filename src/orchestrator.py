@@ -9,6 +9,21 @@ Install langgraph for full graph-based workflow: pip install langgraph
 import os
 from typing import TypedDict, List, Annotated, Optional
 
+# Load environment variables from .env file (check parent directory too)
+try:
+    from dotenv import load_dotenv
+    from pathlib import Path
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+    else:
+        # Try parent directory (workspace root)
+        env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+        if env_path.exists():
+            load_dotenv(env_path)
+except ImportError:
+    pass
+
 from src.models import ResearchState
 from src.planning_agent import PlanningAgent
 from src.search_agent import SearchAgent
@@ -131,19 +146,29 @@ class Orchestrator:
         }
         
         # Step 1: Planning
-        yield "plan", self._plan_step(state)
+        plan_result = self._plan_step(state)
+        state.update(plan_result)
+        yield "plan", plan_result
         
         # Step 2: Search
-        yield "search", self._search_step(state)
+        search_result = self._search_step(state)
+        state.update(search_result)
+        yield "search", search_result
         
         # Step 3: Read
-        yield "read", self._read_step(state)
+        read_result = self._read_step(state)
+        state.update(read_result)
+        yield "read", read_result
         
         # Step 4: Verify
-        yield "verify", self._verify_step(state)
+        verify_result = self._verify_step(state)
+        state.update(verify_result)
+        yield "verify", verify_result
         
         # Step 5: Write
-        yield "write", self._write_step(state)
+        write_result = self._write_step(state)
+        state.update(write_result)
+        yield "write", write_result
     
     def _plan_step(self, state: ResearchState) -> dict:
         """Execute the planning phase."""
@@ -186,12 +211,13 @@ class Orchestrator:
         print(f"\n=== Reading Phase ===")
         
         try:
-            # Get URLs from search results
-            urls = [r['url'] for r in search_results[:8]]  # Top 8 results
+            # Get URLs from search results - limit to top 3 for speed
+            urls = [r['url'] for r in search_results[:3]]
             
             if not urls:
                 return {'fetched_content': [], 'errors': ['No URLs to fetch']}
             
+            print(f"Fetching content from {len(urls)} URLs...")
             content = self.reader_agent.process_urls(urls, query)
             print(f"Successfully fetched {len(content)} articles")
             
@@ -255,18 +281,18 @@ class Orchestrator:
 
 
 def get_llm_client():
-    """Create OpenAI client from environment variable."""
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        print("Warning: OPENAI_API_KEY not set. Running in fallback mode.")
-        return None
+    """Create Groq LLM client from environment variable."""
+    api_key = os.getenv('GROQ_API_KEY')
+    if api_key:
+        try:
+            from langchain_groq import ChatGroq
+            print("Using Groq API (Llama 3.1 70B)")
+            return ChatGroq(model="llama-3.1-70b-versatile", api_key=api_key)
+        except ImportError:
+            pass
     
-    try:
-        from openai import OpenAI
-        return OpenAI(api_key=api_key)
-    except ImportError:
-        print("Warning: OpenAI package not installed. Running in fallback mode.")
-        return None
+    print("Warning: GROQ_API_KEY not set. Running in fallback mode.")
+    return None
 
 
 if __name__ == "__main__":

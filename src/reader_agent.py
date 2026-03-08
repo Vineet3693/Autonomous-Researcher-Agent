@@ -52,8 +52,16 @@ class ReaderAgent:
         """
         try:
             # Try newspaper3k first for better extraction
+            import requests
+            # Quick check if URL is accessible
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            response = requests.get(url, timeout=timeout, headers=headers)
+            response.raise_for_status()
+            
             article = newspaper.Article(url)
-            article.download()  # Removed timeout parameter - not supported in all versions
+            article.download(input_html=response.text)
             article.parse()
             
             if article.text and len(article.text) > 100:
@@ -168,14 +176,20 @@ Content:
 
 Summary:"""
             
-            response = self.llm_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.5,
-                max_tokens=200
-            )
-            
-            return response.choices[0].message.content.strip()[:max_length]
+            # Check if it's a LangChain client (Groq) or OpenAI client
+            if hasattr(self.llm_client, 'invoke'):
+                # LangChain client (Groq)
+                response = self.llm_client.invoke(prompt)
+                return response.content[:max_length]
+            else:
+                # OpenAI client
+                response = self.llm_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.5,
+                    max_tokens=200
+                )
+                return response.choices[0].message.content.strip()[:max_length]
             
         except Exception as e:
             print(f"LLM summarization failed: {e}")

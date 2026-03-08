@@ -56,15 +56,23 @@ Research topic: {query}
 Example output format:
 ["query 1", "query 2", "query 3"]
 """
-            response = self.llm_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=500
-            )
+            # Check if it's a LangChain client (Groq) or OpenAI client
+            if hasattr(self.llm_client, 'invoke'):
+                # LangChain client (Groq)
+                response = self.llm_client.invoke(prompt)
+                content = response.content
+            else:
+                # OpenAI client
+                response = self.llm_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7,
+                    max_tokens=500
+                )
+                content = response.choices[0].message.content.strip()
             
             import json
-            queries = json.loads(response.choices[0].message.content.strip())
+            queries = json.loads(content)
             return queries[:num_queries]
             
         except Exception as e:
