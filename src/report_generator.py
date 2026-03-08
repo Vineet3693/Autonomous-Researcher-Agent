@@ -155,29 +155,18 @@ def generate_pdf_report(markdown_content: str, title: str = "Research Report") -
                 # Handle bold and italic - need to be careful with order
                 formatted = stripped
                 
-                # First, handle markdown formatting before escaping
-                # Replace markdown bold (**text** or __text__)
+                # First, escape HTML special characters
+                formatted = formatted.replace('&', '&amp;')
+                formatted = formatted.replace('<', '&lt;')
+                formatted = formatted.replace('>', '&gt;')
+                
+                # Now convert markdown to ReportLab-compatible HTML
+                # Process bold first (longer patterns)
                 formatted = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', formatted)
                 formatted = re.sub(r'__(.+?)__', r'<b>\1</b>', formatted)
-                # Replace markdown italic (*text* or _text_)
-                formatted = re.sub(r'\*(.+?)\*', r'<i>\1</i>', formatted)
-                formatted = re.sub(r'_(.+?)_', r'<i>\1</i>', formatted)
-                
-                # Now escape any remaining HTML special characters that aren't part of our tags
-                # We need to be careful not to escape < and > in our <b>, </b>, <i>, </i> tags
-                # Split by our tags and escape the content between them
-                parts = re.split(r'(</?[bi]>)', formatted)
-                escaped_parts = []
-                for i, part in enumerate(parts):
-                    if part in ['<b>', '</b>', '<i>', '</i>']:
-                        escaped_parts.append(part)
-                    else:
-                        # Escape HTML special characters in text content
-                        part = part.replace('&', '&amp;')
-                        part = part.replace('<', '&lt;')
-                        part = part.replace('>', '&gt;')
-                        escaped_parts.append(part)
-                formatted = ''.join(escaped_parts)
+                # Then italic
+                formatted = re.sub(r'(?<!\w)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<i>\1</i>', formatted)
+                formatted = re.sub(r'(?<!\w)_(?!_)(.+?)(?<!_)_(?!_)', r'<i>\1</i>', formatted)
                 
                 try:
                     story.append(Paragraph(formatted, normal_style))
@@ -188,6 +177,10 @@ def generate_pdf_report(markdown_content: str, title: str = "Research Report") -
                     plain_text = re.sub(r'__(.+?)__', r'\1', plain_text)
                     plain_text = re.sub(r'\*(.+?)\*', r'\1', plain_text)
                     plain_text = re.sub(r'_(.+?)_', r'\1', plain_text)
+                    # Escape HTML in plain text
+                    plain_text = plain_text.replace('&', '&amp;')
+                    plain_text = plain_text.replace('<', '&lt;')
+                    plain_text = plain_text.replace('>', '&gt;')
                     story.append(Paragraph(plain_text, normal_style))
         
         # Add any remaining list
