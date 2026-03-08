@@ -6,11 +6,11 @@ import os
 from typing import List, Dict
 
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
     DUCKDUCKGO_AVAILABLE = True
 except ImportError:
     DUCKDUCKGO_AVAILABLE = False
-    print("Warning: duckduckgo-search not installed. Search will use fallback mode.")
+    print("Warning: ddgs not installed. Search will use fallback mode.")
 
 from src.models import SearchResult
 
