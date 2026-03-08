@@ -4,6 +4,7 @@ Supports PDF and DOCX export with proper formatting
 """
 
 import io
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -151,21 +152,43 @@ def generate_pdf_report(markdown_content: str, title: str = "Research Report") -
                     current_list = []
                     in_list = False
                 
-                # Handle bold and italic - escape special HTML characters first
+                # Handle bold and italic - need to be careful with order
                 formatted = stripped
-                # Escape HTML special characters to prevent parsing errors
-                formatted = formatted.replace('&', '&amp;')
-                formatted = formatted.replace('<', '&lt;')
-                formatted = formatted.replace('>', '&gt;')
-                # Now handle markdown bold/italic
-                formatted = formatted.replace('**', '<b>').replace('__', '<b>')
-                formatted = formatted.replace('*', '<i>').replace('_', '<i>')
+                
+                # First, handle markdown formatting before escaping
+                # Replace markdown bold (**text** or __text__)
+                formatted = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', formatted)
+                formatted = re.sub(r'__(.+?)__', r'<b>\1</b>', formatted)
+                # Replace markdown italic (*text* or _text_)
+                formatted = re.sub(r'\*(.+?)\*', r'<i>\1</i>', formatted)
+                formatted = re.sub(r'_(.+?)_', r'<i>\1</i>', formatted)
+                
+                # Now escape any remaining HTML special characters that aren't part of our tags
+                # We need to be careful not to escape < and > in our <b>, </b>, <i>, </i> tags
+                # Split by our tags and escape the content between them
+                parts = re.split(r'(</?[bi]>)', formatted)
+                escaped_parts = []
+                for i, part in enumerate(parts):
+                    if part in ['<b>', '</b>', '<i>', '</i>']:
+                        escaped_parts.append(part)
+                    else:
+                        # Escape HTML special characters in text content
+                        part = part.replace('&', '&amp;')
+                        part = part.replace('<', '&lt;')
+                        part = part.replace('>', '&gt;')
+                        escaped_parts.append(part)
+                formatted = ''.join(escaped_parts)
                 
                 try:
                     story.append(Paragraph(formatted, normal_style))
                 except Exception as e:
                     # Fallback: use plain text if formatting fails
-                    story.append(Paragraph(stripped, normal_style))
+                    # Strip all markdown and HTML
+                    plain_text = re.sub(r'\*\*(.+?)\*\*', r'\1', stripped)
+                    plain_text = re.sub(r'__(.+?)__', r'\1', plain_text)
+                    plain_text = re.sub(r'\*(.+?)\*', r'\1', plain_text)
+                    plain_text = re.sub(r'_(.+?)_', r'\1', plain_text)
+                    story.append(Paragraph(plain_text, normal_style))
         
         # Add any remaining list
         if current_list:
