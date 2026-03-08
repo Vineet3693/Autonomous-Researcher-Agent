@@ -1,1 +1,1 @@
-(src/report_generator.py)
+Nothing should be ignored based on the provided file changes. The only modified file is 'streamlit_app/app.py', which is a source code file and should not be added to .gitignore.

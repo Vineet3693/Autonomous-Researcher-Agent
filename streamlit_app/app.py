@@ -38,7 +38,6 @@ from src.multi_llm import (
     initialize_multi_llm_session_state,
     render_api_configuration_sidebar
 )
-from src.report_generator import get_report_download_button, ReportGenerator
 
 
 def initialize_session_state():
@@ -209,7 +208,7 @@ def run_research(query: str, max_sources: int):
 
 
 def display_report(query: str):
-    """Display the generated report with download options."""
+    """Display the generated report."""
     st.divider()
     
     if st.session_state.errors:
@@ -221,23 +220,8 @@ def display_report(query: str):
     # Report header
     st.subheader("📄 Research Report")
     
-    # Download buttons for multiple formats
+    # Display report content
     if st.session_state.report:
-        # Create filename base from query
-        filename_base = query[:30].replace(' ', '_').replace('/', '_').replace('\\', '_')
-        filename_base = "".join(c for c in filename_base if c.isalnum() or c in '_-')
-        
-        # Multi-format download buttons
-        get_report_download_button(
-            st,
-            content=st.session_state.report,
-            filename_base=filename_base,
-            title=query[:100]
-        )
-        
-        st.divider()
-        
-        # Display report content
         st.markdown(st.session_state.report)
 
 
