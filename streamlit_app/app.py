@@ -1,5 +1,10 @@
 """
 Streamlit Web Interface for the Autonomous Research Agent.
+Features:
+- Multi-LLM provider support (OpenAI, Gemini, Claude, Groq, Grok)
+- API key auto-detection
+- Environment variable and manual entry modes
+- PDF, DOCX, and Markdown report downloads
 """
 
 import streamlit as st
@@ -8,6 +13,17 @@ from datetime import datetime
 
 # Import from src
 from src.orchestrator import Orchestrator, get_llm_client
+from src.multi_llm import (
+    MultiLLMManager,
+    LLMProvider,
+    detect_provider_from_key,
+    validate_api_key,
+    get_provider_display_name,
+    get_available_providers,
+    initialize_multi_llm_session_state,
+    render_api_configuration_sidebar
+)
+from src.report_generator import get_report_download_button, ReportGenerator
 
 
 def initialize_session_state():
@@ -20,6 +36,9 @@ def initialize_session_state():
         st.session_state.is_processing = False
     if 'start_time' not in st.session_state:
         st.session_state.start_time = None
+    
+    # Initialize multi-LLM session state
+    initialize_multi_llm_session_state()
 
 
 def render_sidebar():
@@ -27,16 +46,29 @@ def render_sidebar():
     with st.sidebar:
         st.title("⚙️ Configuration")
         
-        # API Key input
-        api_key = st.text_input(
-            "OpenAI API Key",
-            type="password",
-            value=os.getenv('OPENAI_API_KEY', ''),
-            help="Optional: Required for LLM-powered features"
-        )
+        # Multi-LLM API Configuration
+        selected_provider, api_key, config_mode = render_api_configuration_sidebar()
         
-        if api_key:
-            os.environ['OPENAI_API_KEY'] = api_key
+        st.divider()
+        
+        # Configure LLM if API key provided
+        if api_key and selected_provider:
+            try:
+                llm_manager = st.session_state.llm_manager
+                detected_provider = llm_manager.add_api_key(api_key, selected_provider)
+                st.success(f"✅ {get_provider_display_name(detected_provider)} configured!")
+                
+                # Set as current provider
+                llm_manager.set_current_provider(detected_provider)
+                
+            except Exception as e:
+                st.error(f"Failed to configure API: {str(e)}")
+        
+        # Display current provider status
+        if 'llm_manager' in st.session_state:
+            current = st.session_state.llm_manager.get_current_provider()
+            if current:
+                st.info(f"🎯 Active: {get_provider_display_name(current)}")
         
         st.divider()
         
@@ -49,6 +81,13 @@ def render_sidebar():
         - Searches multiple sources
         - Extracts and verifies information
         - Generates cited reports
+        
+        **Supported LLM Providers:**
+        - 🟢 OpenAI (GPT-4, GPT-3.5)
+        - 🔵 Google Gemini
+        - 🟠 Anthropic Claude
+        - ⚡ Groq (Llama models)
+        - ✖️ xAI Grok
         
         **Workflow:**
         1. 📋 Planning
@@ -91,7 +130,7 @@ def render_main_interface():
     
     # Display results
     if st.session_state.report:
-        display_report()
+        display_report(query)
 
 
 def run_research(query: str, max_sources: int):
@@ -103,8 +142,15 @@ def run_research(query: str, max_sources: int):
     progress_placeholder = st.empty()
     
     try:
-        # Initialize orchestrator
-        llm_client = get_llm_client()
+        # Get LLM client from multi-LLM manager
+        llm_client = None
+        if 'llm_manager' in st.session_state:
+            llm_client = st.session_state.llm_manager.get_current_client()
+        
+        # Fallback to environment-based client
+        if llm_client is None:
+            llm_client = get_llm_client()
+        
         orchestrator = Orchestrator(llm_client)
         
         with progress_placeholder.container():
@@ -112,8 +158,10 @@ def run_research(query: str, max_sources: int):
             
             # Run with streaming updates
             steps_completed = []
-            for step_name, output in orchestrator.run_streaming(query):
+            output = {}
+            for step_name, step_output in orchestrator.run_streaming(query):
                 steps_completed.append(step_name)
+                output = step_output
                 
                 status_messages = {
                     'plan': "📋 Creating research plan...",
@@ -145,8 +193,8 @@ def run_research(query: str, max_sources: int):
         st.error(f"Research failed: {str(e)}")
 
 
-def display_report():
-    """Display the generated report."""
+def display_report(query: str):
+    """Display the generated report with download options."""
     st.divider()
     
     if st.session_state.errors:
@@ -156,37 +204,26 @@ def display_report():
         st.divider()
     
     # Report header
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        st.subheader("📄 Research Report")
-    with col2:
-        if st.button("📥 Download Markdown"):
-            download_report()
+    st.subheader("📄 Research Report")
     
-    # Display report
+    # Download buttons for multiple formats
     if st.session_state.report:
-        st.markdown(st.session_state.report)
+        # Create filename base from query
+        filename_base = query[:30].replace(' ', '_').replace('/', '_').replace('\\', '_')
+        filename_base = "".join(c for c in filename_base if c.isalnum() or c in '_-')
         
-        # Copy to clipboard button (using JavaScript workaround)
-        st.download_button(
-            label="📋 Copy Report",
-            data=st.session_state.report,
-            file_name=f"research_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-            mime="text/markdown"
+        # Multi-format download buttons
+        get_report_download_button(
+            st,
+            content=st.session_state.report,
+            filename_base=filename_base,
+            title=query[:100]
         )
-
-
-def download_report():
-    """Trigger report download."""
-    if st.session_state.report:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        st.download_button(
-            label="Downloading...",
-            data=st.session_state.report,
-            file_name=f"research_report_{timestamp}.md",
-            mime="text/markdown",
-            key='download_btn'
-        )
+        
+        st.divider()
+        
+        # Display report content
+        st.markdown(st.session_state.report)
 
 
 def main():
@@ -227,7 +264,7 @@ def main():
     st.markdown(
         """
         <div style='text-align: center; color: gray; font-size: 0.9rem;'>
-            Powered by LangGraph • Multi-Agent Architecture • Open Source
+            Powered by LangGraph • Multi-Agent Architecture • Multi-LLM Support • Open Source
         </div>
         """,
         unsafe_allow_html=True

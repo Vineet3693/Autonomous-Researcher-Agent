@@ -5,42 +5,63 @@ A LangGraph-based multi-agent system for autonomous research tasks. Handles quer
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Orchestrator                                │
-│                  (LangGraph Workflow)                            │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│                      Orchestrator                          │
+│                  (LangGraph Workflow)                      │
+└────────────────────────────────────────────────────────────┘
                               │
         ┌─────────────────────┼─────────────────────┐
         ▼                     ▼                     ▼
-┌───────────────┐    ┌───────────────┐    ┌───────────────┐
-│   Planning    │───▶│    Search     │───▶│    Reader     │
-│    Agent      │    │    Agent      │    │    Agent      │
-└───────────────┘    └───────────────┘    └───────────────┘
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│   Planning       │───▶│   Search         │───▶│   Reader         │
+│   Agent          │    │   Agent          │    │   Agent          │
+└──────────────────┘    └──────────────────┘    └──────────────────┘
                                               │
         ┌─────────────────────────────────────┘
         ▼
-┌───────────────┐    ┌───────────────┐
-│   Verifier    │───▶│    Writer     │
-│    Agent      │    │    Agent      │
-└───────────────┘    └───────────────┘
+┌──────────────────┐    ┌──────────────────┐
+│   Verifier       │───▶│   Writer         │
+│   Agent          │    │   Agent          │
+└──────────────────┘    └──────────────────┘
                               │
                               ▼
-                    ┌───────────────┐
-                    │  Markdown     │
-                    │   Report      │
-                    └───────────────┘
+                    ┌──────────────────┐
+                    │  PDF/DOCX/MD     │
+                    │   Reports        │
+                    └──────────────────┘
 ```
 
 ## 📋 Features
 
+### Core Research Capabilities
 - **Query Decomposition**: ReAct pattern for breaking down complex research questions
 - **Multi-Source Search**: DuckDuckGo integration with domain filtering
 - **Content Extraction**: newspaper3k + BeautifulSoup for clean text extraction
 - **Source Credibility**: Domain-based credibility scoring
 - **Claim Verification**: Cross-referencing with confidence scores (0.0-1.0)
 - **Contradiction Detection**: Identifies conflicting information
-- **Report Generation**: Structured markdown reports with auto-citations
-- **Fallback Mechanisms**: Graceful degradation when services fail
+- **Report Generation**: Structured reports with auto-citations
+
+### Multi-LLM Support 🔥
+- **OpenAI** (GPT-4, GPT-3.5)
+- **Google Gemini** (Gemini Pro)
+- **Anthropic Claude** (Claude 3 Haiku/Sonnet)
+- **Groq** (Llama 3.1 70B)
+- **xAI Grok** (Grok Beta)
+- **Auto-Detection**: Automatically detects API key provider
+- **Flexible Configuration**: Environment variables or manual entry
+
+### Report Export Formats 📄
+- **PDF**: Professional formatting with custom styles
+- **DOCX**: Microsoft Word compatible
+- **Markdown**: Native format with syntax highlighting
+
+### Web Interface Features
+- Dual configuration mode (Local/Cloud)
+- Real-time workflow progress tracking
+- Multi-format download buttons
+- Provider status indicators
+- Responsive design
 
 ## 🚀 Quick Start
 
@@ -55,7 +76,14 @@ pip install -r requirements.txt
 Create a `.env` file:
 
 ```bash
-OPENAI_API_KEY=your_api_key_here
+# Single provider
+OPENAI_API_KEY=sk-...
+
+# Multiple providers (optional)
+GEMINI_API_KEY=AIza...
+ANTHROPIC_API_KEY=sk-ant-...
+GROQ_API_KEY=gsk_...
+XAI_API_KEY=xai-...
 ```
 
 ### Run CLI
@@ -70,6 +98,8 @@ python src/orchestrator.py
 streamlit run streamlit_app/app.py
 ```
 
+Access at: `http://localhost:8501`
+
 ## 📁 Project Structure
 
 ```
@@ -81,9 +111,11 @@ streamlit run streamlit_app/app.py
 │   ├── search_agent.py     # DuckDuckGo search
 │   ├── reader_agent.py     # Content extraction
 │   ├── verifier_agent.py   # Claim verification
-│   └── writer_agent.py     # Report generation
+│   ├── writer_agent.py     # Report generation
+│   ├── multi_llm.py        # Multi-LLM provider support ✨ NEW
+│   └── report_generator.py # PDF/DOCX export ✨ NEW
 ├── streamlit_app/
-│   └── app.py              # Web interface
+│   └── app.py              # Enhanced web interface
 ├── tests/
 │   └── test_agents.py      # Unit tests
 ├── requirements.txt
@@ -121,6 +153,18 @@ streamlit run streamlit_app/app.py
 - Verified claim synthesis
 - Auto-generated citations
 - Executive Summary, Key Findings, Analysis, Sources sections
+
+### 7. Multi-LLM Manager (`src/multi_llm.py`) ✨ NEW
+- Support for 5+ LLM providers
+- API key auto-detection from format
+- Unified invocation interface
+- Session-based provider management
+
+### 8. Report Generator (`src/report_generator.py`) ✨ NEW
+- PDF export with professional styling
+- DOCX export for Word compatibility
+- Markdown native format
+- Batch format generation
 
 ## 🧪 Testing
 
@@ -171,7 +215,11 @@ This research report examines: climate change impacts on agriculture
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `OPENAI_API_KEY` | OpenAI API key for LLM features | No* |
+| `OPENAI_API_KEY` | OpenAI API key | No* |
+| `GEMINI_API_KEY` | Google Gemini API key | No |
+| `ANTHROPIC_API_KEY` | Anthropic Claude API key | No |
+| `GROQ_API_KEY` | Groq API key | No |
+| `XAI_API_KEY` | xAI Grok API key | No |
 
 *Optional: System runs in fallback mode without LLM
 
@@ -181,6 +229,12 @@ Add new agents by:
 1. Create agent class in `src/`
 2. Add node to orchestrator graph
 3. Update `ResearchState` if needed
+
+Add new LLM providers by:
+1. Add provider to `LLMProvider` enum in `multi_llm.py`
+2. Add API key pattern to `API_KEY_PATTERNS`
+3. Implement client creation in `get_llm_client()`
+4. Add invocation logic in `invoke_llm()`
 
 ## 📝 License
 
