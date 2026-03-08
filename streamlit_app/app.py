@@ -9,7 +9,22 @@ Features:
 
 import streamlit as st
 import os
+import sys
+from pathlib import Path
 from datetime import datetime
+
+# --- FIX FOR STREAMLIT CLOUD DEPLOYMENT ---
+# Add the project root and 'src' directory to the Python path
+# This allows imports like 'from src.orchestrator import ...' to work on Cloud
+current_dir = Path(__file__).resolve().parent
+project_root = current_dir.parent
+
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+if str(project_root / "src") not in sys.path:
+    sys.path.insert(0, str(project_root / "src"))
+# ------------------------------------------
 
 # Import from src
 from src.orchestrator import Orchestrator, get_llm_client
