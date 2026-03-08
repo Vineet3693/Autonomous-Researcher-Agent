@@ -151,12 +151,21 @@ def generate_pdf_report(markdown_content: str, title: str = "Research Report") -
                     current_list = []
                     in_list = False
                 
-                # Handle bold and italic
+                # Handle bold and italic - escape special HTML characters first
                 formatted = stripped
+                # Escape HTML special characters to prevent parsing errors
+                formatted = formatted.replace('&', '&amp;')
+                formatted = formatted.replace('<', '&lt;')
+                formatted = formatted.replace('>', '&gt;')
+                # Now handle markdown bold/italic
                 formatted = formatted.replace('**', '<b>').replace('__', '<b>')
                 formatted = formatted.replace('*', '<i>').replace('_', '<i>')
                 
-                story.append(Paragraph(formatted, normal_style))
+                try:
+                    story.append(Paragraph(formatted, normal_style))
+                except Exception as e:
+                    # Fallback: use plain text if formatting fails
+                    story.append(Paragraph(stripped, normal_style))
         
         # Add any remaining list
         if current_list:
