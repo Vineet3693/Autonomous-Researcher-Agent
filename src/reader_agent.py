@@ -53,7 +53,7 @@ class ReaderAgent:
         try:
             # Try newspaper3k first for better extraction
             article = newspaper.Article(url)
-            article.download(timeout=timeout)
+            article.download()  # Removed timeout parameter - not supported in all versions
             article.parse()
             
             if article.text and len(article.text) > 100:
