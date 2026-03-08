@@ -1,0 +1,22 @@
+# Core dependencies
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-openai>=0.2.0
+openai>=1.50.0
+
+# Search and web scraping
+duckduckgo-search>=6.0.0
+newspaper3k>=0.2.8
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+lxml>=5.0.0
+
+# Web interface
+streamlit>=1.30.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+
+# Utilities
+python-dotenv>=1.0.0
