@@ -152,36 +152,31 @@ def generate_pdf_report(markdown_content: str, title: str = "Research Report") -
                     current_list = []
                     in_list = False
                 
-                # Handle bold and italic - need to be careful with order
-                formatted = stripped
+                # Strip ALL markdown and HTML to ensure clean text
+                plain_text = stripped
                 
-                # First, escape HTML special characters
-                formatted = formatted.replace('&', '&amp;')
-                formatted = formatted.replace('<', '&lt;')
-                formatted = formatted.replace('>', '&gt;')
+                # Remove any existing HTML tags
+                plain_text = re.sub(r'<[^>]+>', '', plain_text)
                 
-                # Now convert markdown to ReportLab-compatible HTML
-                # Process bold first (longer patterns)
-                formatted = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', formatted)
-                formatted = re.sub(r'__(.+?)__', r'<b>\1</b>', formatted)
-                # Then italic
-                formatted = re.sub(r'(?<!\w)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<i>\1</i>', formatted)
-                formatted = re.sub(r'(?<!\w)_(?!_)(.+?)(?<!_)_(?!_)', r'<i>\1</i>', formatted)
+                # Remove markdown formatting (bold, italic, code, links)
+                plain_text = re.sub(r'\*\*(.+?)\*\*', r'\1', plain_text)
+                plain_text = re.sub(r'__(.+?)__', r'\1', plain_text)
+                plain_text = re.sub(r'\*(.+?)\*', r'\1', plain_text)
+                plain_text = re.sub(r'_(.+?)_', r'\1', plain_text)
+                plain_text = re.sub(r'`(.+?)`', r'\1', plain_text)
+                plain_text = re.sub(r'\[(.+?)\]\(.+?\)', r'\1', plain_text)
+                
+                # Now escape HTML special characters for ReportLab
+                plain_text = plain_text.replace('&', '&amp;')
+                plain_text = plain_text.replace('<', '&lt;')
+                plain_text = plain_text.replace('>', '&gt;')
                 
                 try:
-                    story.append(Paragraph(formatted, normal_style))
-                except Exception as e:
-                    # Fallback: use plain text if formatting fails
-                    # Strip all markdown and HTML
-                    plain_text = re.sub(r'\*\*(.+?)\*\*', r'\1', stripped)
-                    plain_text = re.sub(r'__(.+?)__', r'\1', plain_text)
-                    plain_text = re.sub(r'\*(.+?)\*', r'\1', plain_text)
-                    plain_text = re.sub(r'_(.+?)_', r'\1', plain_text)
-                    # Escape HTML in plain text
-                    plain_text = plain_text.replace('&', '&amp;')
-                    plain_text = plain_text.replace('<', '&lt;')
-                    plain_text = plain_text.replace('>', '&gt;')
                     story.append(Paragraph(plain_text, normal_style))
+                except Exception as e:
+                    # Ultimate fallback: remove any remaining problematic characters
+                    safe_text = ''.join(c if ord(c) < 128 or c in 'éèêëàâäùûüôöîïçÉÈÊËÀÂÄÙÛÜÔÖÎÏÇ' else '' for c in plain_text)
+                    story.append(Paragraph(safe_text, normal_style))
         
         # Add any remaining list
         if current_list:
